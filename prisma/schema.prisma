@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ইউজারের রোল এবং অর্ডারের স্ট্যাটাস
+enum Role {
+  CUSTOMER
+  VENDOR
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+// ১. ইউজার টেবিল
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(CUSTOMER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shop      Shop?    // একজন ইউজারের একটিই শপ থাকতে পারবে
+  cart      Cart?    // একজন ইউজারের একটিই কার্ট থাকবে
+  orders    Order[]
+}
+
+// ২. শপ / ভেন্ডর টেবিল
+model Shop {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  logo        String?
+  isApproved  Boolean   @default(false) // অ্যাডমিন অ্যাপ্রুভ করলে true হবে
+  ownerId     String    @unique
+  owner       User      @relation(fields: [ownerId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    Product[]
+  orderItems  OrderItem[] // ভেন্ডর শুধু তার নিজের অর্ডার আইটেম দেখবে
+}
+
+// ৩. ক্যাটাগরি টেবিল
+model Category {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  products  Product[]
+}
+
+// ৪. প্রোডাক্ট টেবিল
+model Product {
+  id          String      @id @default(uuid())
+  name        String
+  description String
+  price       Float
+  stock       Int         @default(0)
+  images      String[]    // একাধিক ছবির URL রাখার জন্য অ্যারে
+  shopId      String
+  shop        Shop        @relation(fields: [shopId], references: [id])
+  categoryId  String
+  category    Category    @relation(fields: [categoryId], references: [id])
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  cartItems   CartItem[]
+  orderItems  OrderItem[]
+}
+
+// ৫. কার্ট ও কার্ট আইটেম
+model Cart {
+  id        String     @id @default(uuid())
+  userId    String     @unique
+  user      User       @relation(fields: [userId], references: [id])
+  items     CartItem[]
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String  @id @default(uuid())
+  cartId    String
+  cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int     @default(1)
+
+  @@unique([cartId, productId]) // একই প্রোডাক্ট কার্টে দুইবার আলাদা রো না হয়ে quantity বাড়বে
+}
+
+// ৬. অর্ডার ও মাল্টি-ভেন্ডর অর্ডার আইটেম
+model Order {
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  totalAmount Float
+  address     String
+  phone       String
+  createdAt   DateTime    @default(now())
+
+  items       OrderItem[]
+}
+
+model OrderItem {
+  id        String      @id @default(uuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product     @relation(fields: [productId], references: [id])
+  shopId    String      // কোন ভেন্ডরের প্রোডাক্ট তা আলাদা করার জন্য
+  shop      Shop        @relation(fields: [shopId], references: [id])
+  quantity  Int
+  price     Float       // অর্ডারের সময় প্রোডাক্টের দাম কত ছিল তা সেভ থাকবে
+  status    OrderStatus @default(PENDING) // প্রত্যেক ভেন্ডর তার নিজের আইটেমের স্ট্যাটাস পাল্টাবে
+}
