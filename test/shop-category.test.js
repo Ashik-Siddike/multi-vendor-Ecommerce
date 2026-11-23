@@ -1,3 +1,4 @@
+process.env.NODE_ENV = 'test';
 require('dotenv').config();
 const app = require('../src/app');
 const prisma = require('../src/config/prisma');

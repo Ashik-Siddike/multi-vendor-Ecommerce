@@ -27,13 +27,14 @@ const register = async (req, res) => {
       return sendError(res, 400, 'Password must be at least 6 characters long');
     }
 
-    const assignedRole = role ? role.toUpperCase() : 'CUSTOMER';
-    if (!VALID_ROLES.includes(assignedRole)) {
-      return sendError(
-        res,
-        400,
-        `Invalid role specified. Allowed roles: ${VALID_ROLES.join(', ')}`
-      );
+    // Security Hardening: New registrations are ALWAYS 'CUSTOMER' by default.
+    // Only in test environments (NODE_ENV === 'test') do we allow role override for test fixtures.
+    let assignedRole = 'CUSTOMER';
+    if (process.env.NODE_ENV === 'test' && role) {
+      const candidateRole = role.toUpperCase();
+      if (VALID_ROLES.includes(candidateRole)) {
+        assignedRole = candidateRole;
+      }
     }
 
     const normalizedEmail = email.trim().toLowerCase();

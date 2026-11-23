@@ -1,0 +1,575 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Multi-Vendor E-Commerce Backend API",
+    "version": "1.0.0",
+    "description": "Enterprise-grade multi-vendor e-commerce backend built with Express.js, Prisma 7, PostgreSQL (Supabase), and Cloudinary. Supports vendor onboarding with admin approval, product catalog with search/filter/pagination, atomic multi-vendor checkout with automatic stock deduction and order item splitting, and vendor-isolated order management."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter JWT token obtained from /api/v1/auth/login or /api/v1/auth/register"
+      }
+    },
+    "schemas": {
+      "StandardResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "message": { "type": "string" },
+          "data": { "type": "object" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "message": { "type": "string" },
+          "errors": { "type": "object", "nullable": true }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "Auth", "description": "Authentication and user management" },
+    { "name": "Categories", "description": "Product categories" },
+    { "name": "Shops", "description": "Vendor shops and storefronts" },
+    { "name": "Products", "description": "Product catalog and vendor inventory" },
+    { "name": "Cart", "description": "Customer shopping cart" },
+    { "name": "Orders", "description": "Multi-vendor orders and item tracking" },
+    { "name": "Admin", "description": "Administrative moderation and analytics" }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "API Health Check",
+        "responses": {
+          "200": { "description": "API is online and healthy" }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register a new user account",
+        "description": "Creates a new user. In production, users are always registered with role CUSTOMER.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email", "password"],
+                "properties": {
+                  "name": { "type": "string", "example": "John Doe" },
+                  "email": { "type": "string", "example": "john@example.com" },
+                  "password": { "type": "string", "example": "password123" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "User successfully registered" },
+          "400": { "description": "Validation error" },
+          "409": { "description": "Email already exists" }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Authenticate user & obtain JWT token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "example": "john@example.com" },
+                  "password": { "type": "string", "example": "password123" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful with token" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get authenticated user profile",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "User profile with optional shop data" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/api/v1/categories": {
+      "get": {
+        "tags": ["Categories"],
+        "summary": "List all categories",
+        "responses": {
+          "200": { "description": "List of categories" }
+        }
+      },
+      "post": {
+        "tags": ["Categories"],
+        "summary": "Create new category (Admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "Laptops & Computers" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Category created" },
+          "403": { "description": "Forbidden - requires Admin" },
+          "409": { "description": "Category name already exists" }
+        }
+      }
+    },
+    "/api/v1/shops": {
+      "get": {
+        "tags": ["Shops"],
+        "summary": "List all approved shops (Public)",
+        "responses": {
+          "200": { "description": "List of approved shops" }
+        }
+      },
+      "post": {
+        "tags": ["Shops"],
+        "summary": "Submit shop opening request (Customer only)",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "example": "SuperTech Electronics" },
+                  "description": { "type": "string", "example": "Top quality gadgets and accessories" },
+                  "logo": { "type": "string", "example": "https://example.com/logo.png" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Shop request created (pending admin review)" },
+          "409": { "description": "Shop name taken or user already has a shop" }
+        }
+      }
+    },
+    "/api/v1/shops/my-shop": {
+      "get": {
+        "tags": ["Shops"],
+        "summary": "Get logged-in user's shop details",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "User's shop details" },
+          "404": { "description": "No shop found" }
+        }
+      },
+      "patch": {
+        "tags": ["Shops"],
+        "summary": "Update own shop details (Vendor only)",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "logo": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Shop updated" },
+          "403": { "description": "Forbidden - Vendor only" }
+        }
+      }
+    },
+    "/api/v1/shops/{id}": {
+      "get": {
+        "tags": ["Shops"],
+        "summary": "Get single approved shop by ID",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Approved shop details" },
+          "404": { "description": "Shop not found or not approved" }
+        }
+      }
+    },
+    "/api/v1/products": {
+      "get": {
+        "tags": ["Products"],
+        "summary": "Browse catalog with search, filters & pagination (Public)",
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "Search in name or description" },
+          { "name": "categoryId", "in": "query", "schema": { "type": "string" } },
+          { "name": "shopId", "in": "query", "schema": { "type": "string" } },
+          { "name": "minPrice", "in": "query", "schema": { "type": "number" } },
+          { "name": "maxPrice", "in": "query", "schema": { "type": "number" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 10 } },
+          { "name": "sortBy", "in": "query", "schema": { "type": "string", "enum": ["newest", "price_asc", "price_desc"], "default": "newest" } }
+        ],
+        "responses": {
+          "200": { "description": "Paginated list of approved products" }
+        }
+      },
+      "post": {
+        "tags": ["Products"],
+        "summary": "Create new product (Vendor only)",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "description", "price", "categoryId"],
+                "properties": {
+                  "name": { "type": "string", "example": "MacBook Pro 16" },
+                  "description": { "type": "string", "example": "Apple M3 Max, 36GB RAM, 1TB SSD" },
+                  "price": { "type": "number", "example": 2499.99 },
+                  "stock": { "type": "integer", "example": 15 },
+                  "categoryId": { "type": "string" },
+                  "images": { "type": "array", "items": { "type": "string", "format": "binary" } }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "description", "price", "categoryId"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "price": { "type": "number" },
+                  "stock": { "type": "integer" },
+                  "categoryId": { "type": "string" },
+                  "images": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Product created" },
+          "403": { "description": "Forbidden - requires approved shop" }
+        }
+      }
+    },
+    "/api/v1/products/{id}": {
+      "get": {
+        "tags": ["Products"],
+        "summary": "Get product details by ID",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Product details with shop and category" },
+          "404": { "description": "Product not found" }
+        }
+      },
+      "patch": {
+        "tags": ["Products"],
+        "summary": "Update product (Vendor only - strict ownership)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "description": { "type": "string" },
+                  "price": { "type": "number" },
+                  "stock": { "type": "integer" },
+                  "categoryId": { "type": "string" },
+                  "images": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Product updated" },
+          "403": { "description": "Forbidden - not product owner" }
+        }
+      },
+      "delete": {
+        "tags": ["Products"],
+        "summary": "Delete product (Vendor only - strict ownership)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Product deleted successfully" },
+          "403": { "description": "Forbidden - not product owner" }
+        }
+      }
+    },
+    "/api/v1/cart": {
+      "get": {
+        "tags": ["Cart"],
+        "summary": "View active cart with calculated subtotal",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Active shopping cart" }
+        }
+      }
+    },
+    "/api/v1/cart/items": {
+      "post": {
+        "tags": ["Cart"],
+        "summary": "Add item to cart",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["productId"],
+                "properties": {
+                  "productId": { "type": "string" },
+                  "quantity": { "type": "integer", "default": 1 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Item added or incremented" },
+          "400": { "description": "Stock limit exceeded or invalid quantity" }
+        }
+      }
+    },
+    "/api/v1/cart/items/{itemId}": {
+      "patch": {
+        "tags": ["Cart"],
+        "summary": "Update cart item quantity",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "itemId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["quantity"],
+                "properties": {
+                  "quantity": { "type": "integer", "example": 2 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Quantity updated (or removed if <= 0)" },
+          "400": { "description": "Requested quantity exceeds stock" }
+        }
+      },
+      "delete": {
+        "tags": ["Cart"],
+        "summary": "Remove item from cart",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "itemId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Item removed" }
+        }
+      }
+    },
+    "/api/v1/orders": {
+      "post": {
+        "tags": ["Orders"],
+        "summary": "Checkout & place multi-vendor order",
+        "description": "Atomically deducts product stocks, creates split order items per vendor shop, and clears cart.",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["address", "phone"],
+                "properties": {
+                  "address": { "type": "string", "example": "123 Main St, Apt 4B, City" },
+                  "phone": { "type": "string", "example": "+15551234567" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Order created with split vendor items" },
+          "400": { "description": "Cart is empty or insufficient stock" }
+        }
+      }
+    },
+    "/api/v1/orders/my-orders": {
+      "get": {
+        "tags": ["Orders"],
+        "summary": "List customer order history",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Customer order history with order items" }
+        }
+      }
+    },
+    "/api/v1/orders/vendor-orders": {
+      "get": {
+        "tags": ["Orders"],
+        "summary": "List vendor-isolated order items (Vendor only)",
+        "description": "Returns only order items belonging to the authenticated vendor's shop.",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Vendor order items" },
+          "403": { "description": "Forbidden - requires vendor shop" }
+        }
+      }
+    },
+    "/api/v1/orders/items/{itemId}/status": {
+      "patch": {
+        "tags": ["Orders"],
+        "summary": "Update order item status (Vendor only - strict ownership)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "itemId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["status"],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": ["PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"],
+                    "example": "SHIPPED"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Item status updated" },
+          "403": { "description": "Forbidden - item belongs to another vendor" }
+        }
+      }
+    },
+    "/api/v1/admin/shops/pending": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "List shops pending review (Admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Pending shops list" },
+          "403": { "description": "Forbidden - requires Admin" }
+        }
+      }
+    },
+    "/api/v1/admin/shops/{id}/approve": {
+      "patch": {
+        "tags": ["Admin"],
+        "summary": "Approve shop and promote owner to VENDOR (Admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Shop approved and owner promoted" },
+          "403": { "description": "Forbidden - requires Admin" }
+        }
+      }
+    },
+    "/api/v1/admin/dashboard-stats": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Get system-wide platform statistics (Admin only)",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "Platform aggregate metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "message": { "type": "string" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "stats": {
+                          "type": "object",
+                          "properties": {
+                            "users": { "type": "integer" },
+                            "approvedShops": { "type": "integer" },
+                            "pendingShops": { "type": "integer" },
+                            "products": { "type": "integer" },
+                            "orders": { "type": "integer" },
+                            "totalRevenue": { "type": "number" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": { "description": "Forbidden - requires Admin" }
+        }
+      }
+    }
+  }
+}
