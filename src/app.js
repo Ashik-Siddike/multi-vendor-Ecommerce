@@ -18,6 +18,9 @@ const vendorRoutes = require('./routes/vendor.routes');
 const addressRoutes = require('./routes/address.routes');
 const notificationRoutes = require('./routes/notification.routes');
 const questionRoutes = require('./routes/question.routes');
+const themeRoutes = require('./routes/theme.routes');
+const planRoutes = require('./routes/plan.routes');
+const storefrontRoutes = require('./routes/storefront.routes');
 const { authRateLimiter } = require('./middlewares/rateLimiter.middleware');
 const { sendError, sendSuccess } = require('./utils/response');
 
@@ -57,6 +60,9 @@ app.use('/api/v1/vendor', vendorRoutes);
 app.use('/api/v1/addresses', addressRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/questions', questionRoutes);
+app.use('/api/v1/themes', themeRoutes);
+app.use('/api/v1/plans', planRoutes);
+app.use('/api/v1/storefront', storefrontRoutes);
 
 // Admin Routes (supporting /api/v1/admin/dashboard-stats & /api/v1/admin/shops)
 app.use('/api/v1/admin', adminRoutes);

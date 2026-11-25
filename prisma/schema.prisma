@@ -78,25 +78,34 @@ model User {
   questions     ProductQuestion[] // প্রোডাক্ট নিয়ে করা প্রশ্ন
 }
 
-// ২. শপ / ভেন্ডর টেবিল
+// ২. শপ / ভেন্ডর টেবিল (SaaS Multi-Tenant Storefront)
 model Shop {
-  id             String    @id @default(uuid())
-  name           String    @unique
-  description    String?
-  logo           String?
-  isApproved     Boolean   @default(false) // অ্যাডমিন অ্যাপ্রুভ করলে true হবে
-  commissionRate Float     @default(10.0)  // প্ল্যাটফর্ম কমিশন (%)
-  walletBalance  Float     @default(0)     // তোলার যোগ্য ব্যালেন্স
-  totalEarned    Float     @default(0)     // সর্বমোট আয়
-  ownerId        String    @unique
-  owner          User      @relation(fields: [ownerId], references: [id])
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                 String            @id @default(uuid())
+  name               String            @unique
+  slug               String?           @unique // সাবডোমেইন বা স্টোরফ্রন্ট URL স্লাগ (যেমন: /store/my-shop)
+  customDomain       String?           @unique // কাস্টম ডোমেইন (যেমন: www.mybrand.com)
+  description        String?
+  logo               String?
+  isApproved         Boolean           @default(false) // অ্যাডমিন অ্যাপ্রুভ করলে true হবে
+  commissionRate     Float             @default(10.0)  // প্ল্যাটফর্ম কমিশন (%)
+  walletBalance      Float             @default(0)     // তোলার যোগ্য ব্যালেন্স
+  totalEarned        Float             @default(0)     // সর্বমোট আয়
+  themeId            String?           // সিলেক্ট করা ফ্রন্টএন্ড ডিজাইন টেমপ্লেট
+  theme              ThemeTemplate?    @relation(fields: [themeId], references: [id])
+  themeConfig        Json?             // মার্চেন্টের কাস্টমাইজ করা কালার, ব্যানার, ফন্ট ও ব্র্যান্ডিং
+  planId             String?           // SaaS সাবস্ক্রিপশন প্ল্যান
+  plan               SubscriptionPlan? @relation(fields: [planId], references: [id])
+  subscriptionStatus String            @default("ACTIVE") // TRIAL, ACTIVE, EXPIRED
+  subscriptionEndsAt DateTime?
+  ownerId            String            @unique
+  owner              User              @relation(fields: [ownerId], references: [id])
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
-  products       Product[]
-  orderItems     OrderItem[]     // ভেন্ডর শুধু তার নিজের অর্ডার আইটেম দেখবে
-  coupons        Coupon[]        // ভেন্ডরের তৈরি কুপন
-  payoutRequests PayoutRequest[] // পে-আউট রিকোয়েস্ট
+  products           Product[]
+  orderItems         OrderItem[]     // ভেন্ডর শুধু তার নিজের অর্ডার আইটেম দেখবে
+  coupons            Coupon[]        // ভেন্ডরের তৈরি কুপন
+  payoutRequests     PayoutRequest[] // পে-আউট রিকোয়েস্ট
 }
 
 // ৩. ক্যাটাগরি টেবিল
@@ -288,4 +297,35 @@ model ProductQuestion {
   answer     String?
   answeredAt DateTime?
   createdAt  DateTime  @default(now())
+}
+
+// ১৪. SaaS ফ্রন্টএন্ড থিম টেমপ্লেট টেবিল
+model ThemeTemplate {
+  id            String   @id @default(uuid())
+  slug          String   @unique // যেমন: minimal-light, luxury-dark, electro-grid
+  name          String
+  description   String?
+  previewImage  String?
+  defaultConfig Json     // ডিফল্ট কালার প্যালেট, ফন্ট ও লেআউট সেটিংস
+  isPremium     Boolean  @default(false) // প্রিমিয়াম থিমের জন্য প্রো/এন্টারপ্রাইজ প্ল্যান লাগবে
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  shops         Shop[]
+}
+
+// ১৫. SaaS সাবস্ক্রিপশন প্ল্যান টেবিল
+model SubscriptionPlan {
+  id                 String   @id @default(uuid())
+  name               String   @unique // যেমন: STARTER, PRO, ENTERPRISE
+  monthlyPrice       Float    @default(0)
+  maxProducts        Int      @default(20) // -1 মানে আনলিমিটেড
+  commissionRate     Float    @default(10.0)
+  allowCustomDomain  Boolean  @default(false)
+  allowPremiumThemes Boolean  @default(false)
+  allowCoupons       Boolean  @default(true)
+  description        String?
+  createdAt          DateTime @default(now())
+
+  shops              Shop[]
 }

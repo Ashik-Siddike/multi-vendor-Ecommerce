@@ -51,9 +51,10 @@ const createProduct = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Verify vendor's shop
+    // Verify vendor's shop & subscription quota
     const shop = await prisma.shop.findUnique({
       where: { ownerId: userId },
+      include: { plan: true },
     });
 
     if (!shop) {
@@ -66,6 +67,20 @@ const createProduct = async (req, res) => {
         403,
         'Your shop is pending admin approval. You cannot create products yet.'
       );
+    }
+
+    // SaaS Plan Quota Gatekeeper
+    if (shop.plan && shop.plan.maxProducts > 0) {
+      const currentProductCount = await prisma.product.count({
+        where: { shopId: shop.id },
+      });
+      if (currentProductCount >= shop.plan.maxProducts) {
+        return sendError(
+          res,
+          403,
+          `Product limit (${shop.plan.maxProducts}) reached for your ${shop.plan.name} plan. Please upgrade to add more products.`
+        );
+      }
     }
 
     const { name, description, price, stock, categoryId } = req.body;

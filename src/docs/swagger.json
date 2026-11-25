@@ -111,6 +111,10 @@
       "description": "Customer product questions and vendor answers"
     },
     {
+      "name": "SaaS Storefront & Themes",
+      "description": "Multi-tenant storefront resolution, theme templates, color customization & SaaS plans"
+    },
+    {
       "name": "Admin",
       "description": "Administrative moderation and analytics"
     }
@@ -1843,6 +1847,94 @@
           }
         },
         "responses": { "200": { "description": "Answer posted" } }
+      }
+    },
+    "/api/v1/themes": {
+      "get": {
+        "tags": ["SaaS Storefront & Themes"],
+        "summary": "List all available frontend theme templates (Public)",
+        "responses": { "200": { "description": "Themes retrieved" } }
+      },
+      "post": {
+        "tags": ["SaaS Storefront & Themes"],
+        "summary": "Admin: Add a new frontend theme template",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "201": { "description": "Theme created" } }
+      }
+    },
+    "/api/v1/plans": {
+      "get": {
+        "tags": ["SaaS Storefront & Themes"],
+        "summary": "List all SaaS subscription plans (STARTER, PRO, ENTERPRISE)",
+        "responses": { "200": { "description": "Plans retrieved" } }
+      }
+    },
+    "/api/v1/vendor/theme": {
+      "patch": {
+        "tags": ["SaaS Storefront & Themes"],
+        "summary": "Vendor: Choose frontend theme, customize colors/branding, and set slug/domain",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "themeSlug": { "type": "string", "example": "luxury-dark" },
+                  "slug": { "type": "string", "example": "my-awesome-store" },
+                  "customDomain": { "type": "string", "example": "www.myawesomestore.com" },
+                  "themeConfig": {
+                    "type": "object",
+                    "example": {
+                      "primaryColor": "#E11D48",
+                      "accentColor": "#F59E0B",
+                      "bannerTitle": "Winter Collection 2026"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Theme & customization updated" },
+          "400": { "description": "Invalid hex color or input" },
+          "403": { "description": "Upgrade required for premium themes or custom domain" }
+        }
+      }
+    },
+    "/api/v1/vendor/subscription/upgrade": {
+      "post": {
+        "tags": ["SaaS Storefront & Themes"],
+        "summary": "Vendor: Subscribe/upgrade SaaS plan (updates quota & commission rate)",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["planName"],
+                "properties": {
+                  "planName": { "type": "string", "enum": ["STARTER", "PRO", "ENTERPRISE"], "example": "PRO" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Subscription upgraded" } }
+      }
+    },
+    "/api/v1/storefront/{slug}": {
+      "get": {
+        "tags": ["SaaS Storefront & Themes"],
+        "summary": "Public Multi-Tenant Storefront Resolver (returns shop, resolved colors/theme & products)",
+        "parameters": [{ "name": "slug", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Storefront resolved" },
+          "404": { "description": "Storefront not found" }
+        }
       }
     }
   }

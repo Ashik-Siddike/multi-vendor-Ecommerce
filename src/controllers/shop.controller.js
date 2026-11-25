@@ -38,12 +38,27 @@ const createShop = async (req, res) => {
       return sendError(res, 409, `Shop name '${trimmedName}' is already taken`);
     }
 
+    // Generate unique URL-friendly slug
+    let baseSlug = trimmedName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    if (!baseSlug) baseSlug = `shop-${Date.now()}`;
+
+    const slugExists = await prisma.shop.findUnique({ where: { slug: baseSlug } });
+    const finalSlug = slugExists ? `${baseSlug}-${Date.now().toString().slice(-4)}` : baseSlug;
+
+    // Attach default STARTER plan if available
+    const starterPlan = await prisma.subscriptionPlan.findUnique({ where: { name: 'STARTER' } });
+
     const shop = await prisma.shop.create({
       data: {
         name: trimmedName,
+        slug: finalSlug,
         description: description && typeof description === 'string' ? description.trim() : null,
         logo: logo && typeof logo === 'string' ? logo.trim() : null,
         ownerId: userId,
+        planId: starterPlan ? starterPlan.id : null,
         isApproved: false,
       },
       include: {
