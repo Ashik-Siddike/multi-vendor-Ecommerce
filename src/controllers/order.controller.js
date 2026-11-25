@@ -1,9 +1,18 @@
 const prisma = require('../config/prisma');
 const { sendSuccess, sendError } = require('../utils/response');
+const { createNotification } = require('../utils/notify');
+const { settleEligibleOrderItems } = require('../utils/settlement');
 
 const VALID_ORDER_STATUSES = ['PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
 const VALID_PAYMENT_METHODS = ['COD', 'MANUAL_BKASH', 'MANUAL_NAGAD', 'BANK_TRANSFER'];
 const VALID_PAYMENT_STATUSES = ['PENDING', 'PAID', 'FAILED'];
+const VALID_ZONES = ['INSIDE_CITY', 'OUTSIDE_CITY'];
+
+const SHIPPING_RATES = {
+  INSIDE_CITY: 60,
+  OUTSIDE_CITY: 120,
+};
+const FREE_SHIPPING_THRESHOLD = 2000;
 
 /**
  * Place a multi-vendor order from active cart
@@ -13,19 +22,47 @@ const createOrder = async (req, res) => {
   try {
     const userId = req.user.id;
     const {
+      addressId = null,
       address,
       phone,
+      shippingZone = null,
       paymentMethod = 'COD',
       transactionId = null,
       couponCode = null,
     } = req.body;
 
-    if (!address || typeof address !== 'string' || !address.trim()) {
-      return sendError(res, 400, 'Shipping address is required');
-    }
+    let finalAddress = address;
+    let finalPhone = phone;
+    let finalZone = 'INSIDE_CITY';
+    let applyShippingFee = false;
 
-    if (!phone || typeof phone !== 'string' || !phone.trim()) {
-      return sendError(res, 400, 'Contact phone number is required');
+    // Resolve saved Address if addressId is provided
+    if (addressId) {
+      const savedAddress = await prisma.address.findUnique({
+        where: { id: addressId },
+      });
+      if (!savedAddress || savedAddress.userId !== userId) {
+        return sendError(res, 404, 'Saved address not found');
+      }
+      finalAddress = `${savedAddress.fullName}, ${savedAddress.street}, ${savedAddress.city}`;
+      finalPhone = savedAddress.phone;
+      finalZone = savedAddress.zone;
+      applyShippingFee = true;
+    } else {
+      if (!finalAddress || typeof finalAddress !== 'string' || !finalAddress.trim()) {
+        return sendError(res, 400, 'Shipping address is required');
+      }
+      if (!finalPhone || typeof finalPhone !== 'string' || !finalPhone.trim()) {
+        return sendError(res, 400, 'Contact phone number is required');
+      }
+      if (shippingZone) {
+        const upperZone = shippingZone.toUpperCase();
+        if (!VALID_ZONES.includes(upperZone)) {
+          return sendError(res, 400, `Invalid shippingZone. Allowed: ${VALID_ZONES.join(', ')}`);
+        }
+        finalZone = upperZone;
+        applyShippingFee = true;
+      }
     }
 
     const normalizedPaymentMethod = paymentMethod.toUpperCase();
@@ -58,7 +95,7 @@ const createOrder = async (req, res) => {
             include: {
               product: {
                 include: {
-                  shop: { select: { isApproved: true } },
+                  shop: { select: { isApproved: true, ownerId: true } },
                 },
               },
             },
@@ -91,9 +128,9 @@ const createOrder = async (req, res) => {
         }
       }
 
-      // 3. Deduct stock for each product
+      // 3. Deduct stock for each product & trigger low-stock alert if stock <= 5
       for (const item of cart.items) {
-        await tx.product.update({
+        const updatedProduct = await tx.product.update({
           where: { id: item.productId },
           data: {
             stock: {
@@ -101,15 +138,26 @@ const createOrder = async (req, res) => {
             },
           },
         });
+
+        if (updatedProduct.stock <= 5) {
+          await createNotification(
+            {
+              userId: item.product.shop.ownerId,
+              title: 'Low Stock Alert',
+              message: `Product "${item.product.name}" is running low on stock (${updatedProduct.stock} remaining).`,
+              type: 'LOW_STOCK',
+            },
+            tx
+          );
+        }
       }
 
-      // 4. Calculate total amount
-      let subtotal = cart.items.reduce(
+      // 4. Calculate subtotal & optional Coupon Discount
+      const subtotal = cart.items.reduce(
         (sum, item) => sum + item.quantity * item.product.price,
         0
       );
 
-      // Optional Coupon Discount
       let discountAmount = 0;
       if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
         const coupon = await tx.coupon.findUnique({
@@ -130,15 +178,23 @@ const createOrder = async (req, res) => {
         }
       }
 
-      const finalTotal = Math.max(0, subtotal - discountAmount);
+      // Dynamic Shipping Fee calculation
+      let shippingFee = 0;
+      if (applyShippingFee) {
+        shippingFee = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_RATES[finalZone];
+      }
+
+      const finalTotal = Math.max(0, subtotal - discountAmount + shippingFee);
 
       // 5. Create Order and OrderItems (multi-vendor split)
       const newOrder = await tx.order.create({
         data: {
           userId,
           totalAmount: parseFloat(finalTotal.toFixed(2)),
-          address: address.trim(),
-          phone: phone.trim(),
+          shippingFee,
+          shippingZone: finalZone,
+          address: finalAddress.trim(),
+          phone: finalPhone.trim(),
           paymentMethod: normalizedPaymentMethod,
           paymentStatus: 'PENDING',
           transactionId: transactionId ? transactionId.trim() : null,
@@ -170,6 +226,17 @@ const createOrder = async (req, res) => {
       await tx.cartItem.deleteMany({
         where: { cartId: cart.id },
       });
+
+      // 7. Notify Customer
+      await createNotification(
+        {
+          userId,
+          title: 'Order Placed',
+          message: `Your order #${newOrder.id.slice(0, 8)} for $${newOrder.totalAmount} has been placed successfully.`,
+          type: 'ORDER_UPDATE',
+        },
+        tx
+      );
 
       return newOrder;
     });
@@ -291,7 +358,10 @@ const updateOrderItemStatus = async (req, res) => {
     // Check if order item exists
     const orderItem = await prisma.orderItem.findUnique({
       where: { id: itemId },
-      include: { order: true },
+      include: {
+        order: true,
+        product: { select: { name: true } },
+      },
     });
 
     if (!orderItem) {
@@ -311,26 +381,46 @@ const updateOrderItemStatus = async (req, res) => {
       );
     }
 
-    const updatedItem = await prisma.orderItem.update({
-      where: { id: itemId },
-      data: { status: normalizedStatus },
-      include: {
-        product: {
-          select: { id: true, name: true },
+    const updatedItem = await prisma.$transaction(async (tx) => {
+      const updated = await tx.orderItem.update({
+        where: { id: itemId },
+        data: { status: normalizedStatus },
+        include: {
+          product: {
+            select: { id: true, name: true },
+          },
+          shop: {
+            select: { id: true, name: true },
+          },
         },
-        shop: {
-          select: { id: true, name: true },
-        },
-      },
-    });
-
-    // If marked DELIVERED and paymentMethod is COD, update order paymentStatus to PAID
-    if (normalizedStatus === 'DELIVERED' && orderItem.order.paymentMethod === 'COD') {
-      await prisma.order.update({
-        where: { id: orderItem.orderId },
-        data: { paymentStatus: 'PAID' },
       });
-    }
+
+      // Notify customer of status update
+      await createNotification(
+        {
+          userId: orderItem.order.userId,
+          title: `Order Item ${normalizedStatus}`,
+          message: `Your item "${orderItem.product.name}" status has been updated to ${normalizedStatus}.`,
+          type: 'ORDER_UPDATE',
+        },
+        tx
+      );
+
+      // If marked DELIVERED and paymentMethod is COD, update order paymentStatus to PAID
+      if (normalizedStatus === 'DELIVERED' && orderItem.order.paymentMethod === 'COD') {
+        await tx.order.update({
+          where: { id: orderItem.orderId },
+          data: { paymentStatus: 'PAID' },
+        });
+      }
+
+      // Settle eligible delivered & paid items into vendor wallet
+      if (normalizedStatus === 'DELIVERED') {
+        await settleEligibleOrderItems(orderItem.orderId, tx);
+      }
+
+      return updated;
+    });
 
     return sendSuccess(res, 200, 'Order item status updated successfully', {
       orderItem: updatedItem,
@@ -368,9 +458,28 @@ const verifyOrderPayment = async (req, res) => {
       return sendError(res, 404, 'Order not found');
     }
 
-    const updatedOrder = await prisma.order.update({
-      where: { id: orderId },
-      data: { paymentStatus: normalizedStatus },
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data: { paymentStatus: normalizedStatus },
+      });
+
+      await createNotification(
+        {
+          userId: order.userId,
+          title: `Payment ${normalizedStatus}`,
+          message: `Payment verification for your order #${orderId.slice(0, 8)} is now ${normalizedStatus}.`,
+          type: 'ORDER_UPDATE',
+        },
+        tx
+      );
+
+      // Settle any already-delivered items now that payment is PAID
+      if (normalizedStatus === 'PAID') {
+        await settleEligibleOrderItems(orderId, tx);
+      }
+
+      return updated;
     });
 
     return sendSuccess(res, 200, `Order payment status updated to ${normalizedStatus}`, {

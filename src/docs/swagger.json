@@ -95,6 +95,22 @@
       "description": "Platform and vendor discount coupons"
     },
     {
+      "name": "Vendor Finance",
+      "description": "Vendor wallet, payout requests, and business analytics"
+    },
+    {
+      "name": "Addresses",
+      "description": "Customer saved delivery addresses"
+    },
+    {
+      "name": "Notifications",
+      "description": "In-app notification center"
+    },
+    {
+      "name": "Product Q&A",
+      "description": "Customer product questions and vendor answers"
+    },
+    {
       "name": "Admin",
       "description": "Administrative moderation and analytics"
     }
@@ -1594,6 +1610,239 @@
           "200": { "description": "Payment status updated" },
           "404": { "description": "Order not found" }
         }
+      }
+    },
+    "/api/v1/vendor/wallet": {
+      "get": {
+        "tags": ["Vendor Finance"],
+        "summary": "Get vendor wallet balance, total earnings & payout history",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Wallet retrieved" } }
+      }
+    },
+    "/api/v1/vendor/payouts": {
+      "post": {
+        "tags": ["Vendor Finance"],
+        "summary": "Request a payout withdrawal from wallet balance",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["amount", "paymentMethod", "accountDetails"],
+                "properties": {
+                  "amount": { "type": "number", "example": 50 },
+                  "paymentMethod": { "type": "string", "example": "BKASH" },
+                  "accountDetails": { "type": "string", "example": "01712345678" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Payout requested" },
+          "400": { "description": "Insufficient balance" }
+        }
+      }
+    },
+    "/api/v1/vendor/analytics": {
+      "get": {
+        "tags": ["Vendor Finance"],
+        "summary": "Get vendor sales analytics, top products, and low-stock alerts",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Analytics retrieved" } }
+      }
+    },
+    "/api/v1/admin/payouts": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "List all vendor payout requests",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] } }
+        ],
+        "responses": { "200": { "description": "Payouts retrieved" } }
+      }
+    },
+    "/api/v1/admin/payouts/{id}": {
+      "patch": {
+        "tags": ["Admin"],
+        "summary": "Approve or Reject a vendor payout request",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["status"],
+                "properties": {
+                  "status": { "type": "string", "enum": ["APPROVED", "REJECTED"] },
+                  "transactionRef": { "type": "string", "example": "BKASH_REF_12345" },
+                  "adminNote": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Payout processed" } }
+      }
+    },
+    "/api/v1/admin/shops/{id}/commission": {
+      "patch": {
+        "tags": ["Admin"],
+        "summary": "Update platform commission rate (%) for a shop",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["commissionRate"],
+                "properties": {
+                  "commissionRate": { "type": "number", "example": 12.5 }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Commission updated" } }
+      }
+    },
+    "/api/v1/addresses": {
+      "get": {
+        "tags": ["Addresses"],
+        "summary": "Get saved delivery addresses",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Addresses retrieved" } }
+      },
+      "post": {
+        "tags": ["Addresses"],
+        "summary": "Add a new delivery address",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["fullName", "phone", "street", "city"],
+                "properties": {
+                  "label": { "type": "string", "example": "Home" },
+                  "fullName": { "type": "string", "example": "Ashik Siddike" },
+                  "phone": { "type": "string", "example": "01711112222" },
+                  "street": { "type": "string", "example": "House 12, Road 4, Dhanmondi" },
+                  "city": { "type": "string", "example": "Dhaka" },
+                  "zone": { "type": "string", "enum": ["INSIDE_CITY", "OUTSIDE_CITY"], "default": "INSIDE_CITY" },
+                  "isDefault": { "type": "boolean", "default": true }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Address created" } }
+      }
+    },
+    "/api/v1/addresses/{id}": {
+      "patch": {
+        "tags": ["Addresses"],
+        "summary": "Update a saved address",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Address updated" } }
+      },
+      "delete": {
+        "tags": ["Addresses"],
+        "summary": "Delete a saved address",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Address deleted" } }
+      }
+    },
+    "/api/v1/notifications": {
+      "get": {
+        "tags": ["Notifications"],
+        "summary": "Get user's notifications and unread count",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Notifications retrieved" } }
+      }
+    },
+    "/api/v1/notifications/read-all": {
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Mark all notifications as read",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "All marked as read" } }
+      }
+    },
+    "/api/v1/notifications/{id}/read": {
+      "patch": {
+        "tags": ["Notifications"],
+        "summary": "Mark a single notification as read",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Marked as read" } }
+      }
+    },
+    "/api/v1/products/{productId}/questions": {
+      "get": {
+        "tags": ["Product Q&A"],
+        "summary": "Get all Q&A for a product (Public)",
+        "parameters": [{ "name": "productId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Questions retrieved" } }
+      },
+      "post": {
+        "tags": ["Product Q&A"],
+        "summary": "Customer asks a question on a product",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "productId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["question"],
+                "properties": {
+                  "question": { "type": "string", "example": "Does this support Type-C PD fast charging?" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Question submitted" } }
+      }
+    },
+    "/api/v1/questions/{id}/answer": {
+      "patch": {
+        "tags": ["Product Q&A"],
+        "summary": "Vendor answers a product question (Strict Shop Ownership)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["answer"],
+                "properties": {
+                  "answer": { "type": "string", "example": "Yes, it supports up to 65W PD fast charging!" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Answer posted" } }
       }
     }
   }

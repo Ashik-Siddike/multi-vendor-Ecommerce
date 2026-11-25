@@ -6,6 +6,11 @@ const {
   getDashboardStats,
 } = require('../controllers/admin.controller');
 const { verifyOrderPayment } = require('../controllers/order.controller');
+const {
+  getAllPayoutRequests,
+  processPayoutRequest,
+  updateShopCommission,
+} = require('../controllers/vendor.controller');
 const { verifyToken, checkRole } = require('../middlewares/auth.middleware');
 
 // All admin routes require ADMIN role
@@ -16,6 +21,11 @@ router.get('/dashboard-stats', getDashboardStats);
 
 // Manual payment verification endpoint
 router.patch('/orders/:orderId/verify-payment', verifyOrderPayment);
+
+// Vendor Payouts & Commission Management
+router.get('/payouts', getAllPayoutRequests);
+router.patch('/payouts/:id', processPayoutRequest);
+router.patch('/shops/:id/commission', updateShopCommission);
 
 // Shop management endpoints under /admin
 router.get('/shops/pending', getPendingShops);

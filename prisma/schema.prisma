@@ -39,6 +39,25 @@ enum DiscountType {
   FIXED
 }
 
+enum PayoutStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ShippingZone {
+  INSIDE_CITY
+  OUTSIDE_CITY
+}
+
+enum NotificationType {
+  ORDER_UPDATE
+  SHOP_APPROVED
+  PAYOUT_UPDATE
+  LOW_STOCK
+  SYSTEM
+}
+
 // ১. ইউজার টেবিল
 model User {
   id        String   @id @default(uuid())
@@ -49,28 +68,35 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  shop      Shop?        // একজন ইউজারের একটিই শপ থাকতে পারবে
-  cart      Cart?        // একজন ইউজারের একটিই কার্ট থাকবে
-  wishlist  Wishlist?    // ইউজারের উইশলিস্ট
-  orders    Order[]
-  reviews   Review[]     // ইউজারের দেওয়া রিভিউগুলো
+  shop          Shop?             // একজন ইউজারের একটিই শপ থাকতে পারবে
+  cart          Cart?             // একজন ইউজারের একটিই কার্ট থাকবে
+  wishlist      Wishlist?         // ইউজারের উইশলিস্ট
+  orders        Order[]
+  reviews       Review[]          // ইউজারের দেওয়া রিভিউগুলো
+  addresses     Address[]         // সেভ করা ডেলিভারি অ্যাড্রেস
+  notifications Notification[]    // ইন-অ্যাপ নোটিফিকেশন
+  questions     ProductQuestion[] // প্রোডাক্ট নিয়ে করা প্রশ্ন
 }
 
 // ২. শপ / ভেন্ডর টেবিল
 model Shop {
-  id          String    @id @default(uuid())
-  name        String    @unique
-  description String?
-  logo        String?
-  isApproved  Boolean   @default(false) // অ্যাডমিন অ্যাপ্রুভ করলে true হবে
-  ownerId     String    @unique
-  owner       User      @relation(fields: [ownerId], references: [id])
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id             String    @id @default(uuid())
+  name           String    @unique
+  description    String?
+  logo           String?
+  isApproved     Boolean   @default(false) // অ্যাডমিন অ্যাপ্রুভ করলে true হবে
+  commissionRate Float     @default(10.0)  // প্ল্যাটফর্ম কমিশন (%)
+  walletBalance  Float     @default(0)     // তোলার যোগ্য ব্যালেন্স
+  totalEarned    Float     @default(0)     // সর্বমোট আয়
+  ownerId        String    @unique
+  owner          User      @relation(fields: [ownerId], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  products    Product[]
-  orderItems  OrderItem[] // ভেন্ডর শুধু তার নিজের অর্ডার আইটেম দেখবে
-  coupons     Coupon[]    // ভেন্ডরের তৈরি কুপন
+  products       Product[]
+  orderItems     OrderItem[]     // ভেন্ডর শুধু তার নিজের অর্ডার আইটেম দেখবে
+  coupons        Coupon[]        // ভেন্ডরের তৈরি কুপন
+  payoutRequests PayoutRequest[] // পে-আউট রিকোয়েস্ট
 }
 
 // ৩. ক্যাটাগরি টেবিল
@@ -101,6 +127,7 @@ model Product {
   orderItems    OrderItem[]
   reviews       Review[]
   wishlistItems WishlistItem[]
+  questions     ProductQuestion[]
 }
 
 // ৫. কার্ট ও কার্ট আইটেম
@@ -129,6 +156,8 @@ model Order {
   userId        String
   user          User          @relation(fields: [userId], references: [id])
   totalAmount   Float
+  shippingFee   Float         @default(0)
+  shippingZone  ShippingZone  @default(INSIDE_CITY)
   address       String
   phone         String
   paymentMethod PaymentMethod @default(COD)
@@ -140,16 +169,19 @@ model Order {
 }
 
 model OrderItem {
-  id        String      @id @default(uuid())
-  orderId   String
-  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId String
-  product   Product     @relation(fields: [productId], references: [id])
-  shopId    String      // কোন ভেন্ডরের প্রোডাক্ট তা আলাদা করার জন্য
-  shop      Shop        @relation(fields: [shopId], references: [id])
-  quantity  Int
-  price     Float       // অর্ডারের সময় প্রোডাক্টের দাম কত ছিল তা সেভ থাকবে
-  status    OrderStatus @default(PENDING) // প্রত্যেক ভেন্ডর তার নিজের আইটেমের স্ট্যাটাস পাল্টাবে
+  id               String      @id @default(uuid())
+  orderId          String
+  order            Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product     @relation(fields: [productId], references: [id])
+  shopId           String      // কোন ভেন্ডরের প্রোডাক্ট তা আলাদা করার জন্য
+  shop             Shop        @relation(fields: [shopId], references: [id])
+  quantity         Int
+  price            Float       // অর্ডারের সময় প্রোডাক্টের দাম কত ছিল তা সেভ থাকবে
+  commissionAmount Float       @default(0) // প্ল্যাটফর্ম কমিশন
+  vendorEarning    Float       @default(0) // ভেন্ডরের নিট আয়
+  isSettled        Boolean     @default(false) // ভেন্ডর ওয়ালেটে টাকা জমা হয়েছে কিনা
+  status           OrderStatus @default(PENDING) // প্রত্যেক ভেন্ডর তার নিজের আইটেমের স্ট্যাটাস পাল্টাবে
 }
 
 // ৭. রিভিউ ও রেটিং টেবিল
@@ -200,4 +232,60 @@ model Coupon {
   shopId        String?      // null হলে অ্যাডমিন/প্ল্যাটফর্ম-ওয়াইড, অন্যথায় ভেন্ডর-স্পেসিফিক
   shop          Shop?        @relation(fields: [shopId], references: [id], onDelete: Cascade)
   createdAt     DateTime     @default(now())
+}
+
+// ১০. ভেন্ডর পে-আউট রিকোয়েস্ট টেবিল
+model PayoutRequest {
+  id             String       @id @default(uuid())
+  shopId         String
+  shop           Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  amount         Float
+  paymentMethod  String       // যেমন: BKASH, NAGAD, BANK
+  accountDetails String       // মোবাইল নম্বর বা ব্যাংক একাউন্ট তথ্য
+  status         PayoutStatus @default(PENDING)
+  transactionRef String?      // অ্যাডমিন টাকা পাঠানোর পর রেফারেন্স আইডি
+  adminNote      String?
+  createdAt      DateTime     @default(now())
+  processedAt    DateTime?
+}
+
+// ১১. কাস্টমার অ্যাড্রেস বুক টেবিল
+model Address {
+  id        String       @id @default(uuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String       @default("Home") // যেমন: Home, Office
+  fullName  String
+  phone     String
+  street    String
+  city      String
+  zone      ShippingZone @default(INSIDE_CITY)
+  isDefault Boolean      @default(false)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+// ১২. ইন-অ্যাপ নোটিফিকেশন টেবিল
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      NotificationType @default(SYSTEM)
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+}
+
+// ১৩. প্রোডাক্ট Q&A (প্রশ্ন ও উত্তর)
+model ProductQuestion {
+  id         String    @id @default(uuid())
+  productId  String
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question   String
+  answer     String?
+  answeredAt DateTime?
+  createdAt  DateTime  @default(now())
 }
