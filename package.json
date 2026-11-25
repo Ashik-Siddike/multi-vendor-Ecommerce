@@ -11,7 +11,7 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "seed": "node prisma/seed.js",
-    "test": "node test/auth.test.js && node test/shop-category.test.js && node test/product.test.js && node test/cart-order.test.js && node test/review.test.js && node test/wishlist-coupon-payment.test.js && node test/enterprise-features.test.js && node test/saas-theme.test.js && node test/advanced-features.test.js",
+    "test": "node test/auth.test.js && node test/shop-category.test.js && node test/product.test.js && node test/cart-order.test.js && node test/review.test.js && node test/wishlist-coupon-payment.test.js && node test/enterprise-features.test.js && node test/saas-theme.test.js && node test/advanced-features.test.js && node test/headless-variant.test.js",
     "test:auth": "node test/auth.test.js",
     "test:phase2": "node test/shop-category.test.js",
     "test:phase3": "node test/product.test.js",
@@ -20,7 +20,8 @@
     "test:wcp": "node test/wishlist-coupon-payment.test.js",
     "test:enterprise": "node test/enterprise-features.test.js",
     "test:saas": "node test/saas-theme.test.js",
-    "test:advanced": "node test/advanced-features.test.js"
+    "test:advanced": "node test/advanced-features.test.js",
+    "test:headless": "node test/headless-variant.test.js"
   },
   "keywords": [],
   "author": "",

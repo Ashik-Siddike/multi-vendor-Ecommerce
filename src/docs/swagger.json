@@ -127,6 +127,10 @@
       "description": "Merchant team staff management & platform audit logs"
     },
     {
+      "name": "Headless & Webhooks",
+      "description": "SaaS developer API keys, webhooks & headless storefront endpoints"
+    },
+    {
       "name": "Admin",
       "description": "Administrative moderation and analytics"
     }
@@ -2089,6 +2093,60 @@
         "summary": "Admin: View platform security & activity audit logs",
         "security": [{ "BearerAuth": [] }],
         "responses": { "200": { "description": "Audit logs retrieved" } }
+      }
+    },
+    "/api/v1/vendor/api-keys": {
+      "get": {
+        "tags": ["Headless & Webhooks"],
+        "summary": "Vendor: List headless API keys",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "API keys retrieved" } }
+      },
+      "post": {
+        "tags": ["Headless & Webhooks"],
+        "summary": "Vendor: Generate Headless Storefront API Key (PRO / ENTERPRISE)",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "201": { "description": "API key generated" }, "403": { "description": "Plan upgrade required" } }
+      }
+    },
+    "/api/v1/vendor/api-keys/{id}": {
+      "delete": {
+        "tags": ["Headless & Webhooks"],
+        "summary": "Vendor: Revoke API key",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "API key revoked" } }
+      }
+    },
+    "/api/v1/vendor/webhooks": {
+      "get": {
+        "tags": ["Headless & Webhooks"],
+        "summary": "Vendor: List registered webhooks",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Webhooks retrieved" } }
+      },
+      "post": {
+        "tags": ["Headless & Webhooks"],
+        "summary": "Vendor: Register HMAC-signed Webhook URL (PRO / ENTERPRISE)",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "201": { "description": "Webhook registered" }, "403": { "description": "Plan upgrade required" } }
+      }
+    },
+    "/api/v1/vendor/webhooks/{id}": {
+      "delete": {
+        "tags": ["Headless & Webhooks"],
+        "summary": "Vendor: Delete webhook",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Webhook deleted" } }
+      }
+    },
+    "/api/v1/headless/products": {
+      "get": {
+        "tags": ["Headless & Webhooks"],
+        "summary": "Headless Storefront: Fetch shop products & variants using x-api-key header",
+        "parameters": [{ "name": "x-api-key", "in": "header", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Products retrieved" }, "401": { "description": "Invalid API Key" } }
       }
     }
   }

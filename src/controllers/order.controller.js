@@ -2,6 +2,7 @@ const prisma = require('../config/prisma');
 const { sendSuccess, sendError } = require('../utils/response');
 const { createNotification } = require('../utils/notify');
 const { settleEligibleOrderItems } = require('../utils/settlement');
+const { dispatchShopWebhook } = require('../utils/webhook');
 
 const VALID_ORDER_STATUSES = ['PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
 const VALID_PAYMENT_METHODS = ['COD', 'MANUAL_BKASH', 'MANUAL_NAGAD', 'BANK_TRANSFER'];
@@ -98,6 +99,7 @@ const createOrder = async (req, res) => {
                   shop: { select: { isApproved: true, ownerId: true } },
                 },
               },
+              variant: true,
             },
           },
         },
@@ -120,43 +122,51 @@ const createOrder = async (req, res) => {
           };
         }
 
-        if (item.product.stock < item.quantity) {
+        const stockToCheck = item.variant ? item.variant.stock : item.product.stock;
+        if (stockToCheck < item.quantity) {
           throw {
             statusCode: 400,
-            message: `Insufficient stock for "${item.product.name}". Available: ${item.product.stock}, in cart: ${item.quantity}.`,
+            message: `Insufficient stock for "${item.product.name}". Available: ${stockToCheck}, in cart: ${item.quantity}.`,
           };
         }
       }
 
-      // 3. Deduct stock for each product & trigger low-stock alert if stock <= 5
+      // 3. Deduct stock for each product/variant & trigger low-stock alert if stock <= 5
       for (const item of cart.items) {
-        const updatedProduct = await tx.product.update({
-          where: { id: item.productId },
-          data: {
-            stock: {
-              decrement: item.quantity,
+        if (item.variant) {
+          await tx.productVariant.update({
+            where: { id: item.variant.id },
+            data: { stock: { decrement: item.quantity } },
+          });
+        } else {
+          const updatedProduct = await tx.product.update({
+            where: { id: item.productId },
+            data: {
+              stock: {
+                decrement: item.quantity,
+              },
             },
-          },
-        });
+          });
 
-        if (updatedProduct.stock <= 5) {
-          await createNotification(
-            {
-              userId: item.product.shop.ownerId,
-              title: 'Low Stock Alert',
-              message: `Product "${item.product.name}" is running low on stock (${updatedProduct.stock} remaining).`,
-              type: 'LOW_STOCK',
-            },
-            tx
-          );
+          if (updatedProduct.stock <= 5) {
+            await createNotification(
+              {
+                userId: item.product.shop.ownerId,
+                title: 'Low Stock Alert',
+                message: `Product "${item.product.name}" is running low on stock (${updatedProduct.stock} remaining).`,
+                type: 'LOW_STOCK',
+              },
+              tx
+            );
+          }
         }
       }
 
       // 4. Calculate subtotal & optional Coupon Discount
-      const subtotal = cart.items.reduce(
-        (sum, item) => sum + item.quantity * item.product.price,
-        0
-      );
+      const subtotal = cart.items.reduce((sum, item) => {
+        const unitPrice = item.variant ? item.variant.price : item.product.price;
+        return sum + item.quantity * unitPrice;
+      }, 0);
 
       let discountAmount = 0;
       if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
@@ -201,9 +211,10 @@ const createOrder = async (req, res) => {
           items: {
             create: cart.items.map((item) => ({
               productId: item.productId,
+              variantId: item.variantId || null,
               shopId: item.product.shopId,
               quantity: item.quantity,
-              price: item.product.price,
+              price: item.variant ? item.variant.price : item.product.price,
               status: 'PENDING',
             })),
           },
@@ -240,6 +251,15 @@ const createOrder = async (req, res) => {
 
       return newOrder;
     });
+
+    // Dispatch order.created webhook per affected shop (non-blocking)
+    const shopIds = [...new Set(result.items.map((i) => i.shopId))];
+    for (const sId of shopIds) {
+      dispatchShopWebhook(sId, 'order.created', {
+        orderId: result.id,
+        items: result.items.filter((i) => i.shopId === sId),
+      }).catch(() => {});
+    }
 
     return sendSuccess(res, 201, 'Order placed successfully', { order: result });
   } catch (error) {

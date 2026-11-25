@@ -24,6 +24,7 @@ const storefrontRoutes = require('./routes/storefront.routes');
 const variantRoutes = require('./routes/variant.routes');
 const flashsaleRoutes = require('./routes/flashsale.routes');
 const returnRoutes = require('./routes/return.routes');
+const headlessRoutes = require('./routes/headless.routes');
 const { authRateLimiter } = require('./middlewares/rateLimiter.middleware');
 const { sendError, sendSuccess } = require('./utils/response');
 
@@ -69,6 +70,7 @@ app.use('/api/v1/storefront', storefrontRoutes);
 app.use('/api/v1/variants', variantRoutes);
 app.use('/api/v1/flash-sales', flashsaleRoutes);
 app.use('/api/v1/returns', returnRoutes);
+app.use('/api/v1/headless', headlessRoutes);
 
 // Admin Routes (supporting /api/v1/admin/dashboard-stats & /api/v1/admin/shops)
 app.use('/api/v1/admin', adminRoutes);

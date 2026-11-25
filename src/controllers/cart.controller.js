@@ -23,6 +23,9 @@ const getOrCreateCart = async (userId) => {
               },
             },
           },
+          variant: {
+            select: { id: true, sku: true, name: true, price: true, stock: true, attributes: true },
+          },
         },
         orderBy: { id: 'asc' },
       },
@@ -66,10 +69,10 @@ const getCart = async (req, res) => {
     const userId = req.user.id;
     const cart = await getOrCreateCart(userId);
 
-    const subtotal = cart.items.reduce(
-      (sum, item) => sum + item.quantity * (item.product?.price || 0),
-      0
-    );
+    const subtotal = cart.items.reduce((sum, item) => {
+      const unitPrice = item.variant ? item.variant.price : item.product?.price || 0;
+      return sum + item.quantity * unitPrice;
+    }, 0);
     const totalItems = cart.items.reduce((sum, item) => sum + item.quantity, 0);
 
     return sendSuccess(res, 200, 'Cart retrieved successfully', {
@@ -91,7 +94,7 @@ const getCart = async (req, res) => {
 const addItemToCart = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { productId, quantity = 1 } = req.body;
+    const { productId, variantId = null, quantity = 1 } = req.body;
 
     if (!productId || typeof productId !== 'string') {
       return sendError(res, 400, 'productId is required');
@@ -118,11 +121,20 @@ const addItemToCart = async (req, res) => {
       return sendError(res, 400, 'Product belongs to an unapproved shop and cannot be purchased');
     }
 
-    if (product.stock < parsedQty) {
+    let availableStock = product.stock;
+    if (variantId) {
+      const variant = await prisma.productVariant.findUnique({ where: { id: variantId } });
+      if (!variant || variant.productId !== product.id) {
+        return sendError(res, 404, 'Product variant not found for this product');
+      }
+      availableStock = variant.stock;
+    }
+
+    if (availableStock < parsedQty) {
       return sendError(
         res,
         400,
-        `Insufficient stock. Available stock: ${product.stock}`
+        `Insufficient stock. Available stock: ${availableStock}`
       );
     }
 
@@ -141,20 +153,23 @@ const addItemToCart = async (req, res) => {
     let cartItem;
     if (existingItem) {
       const newQty = existingItem.quantity + parsedQty;
-      if (newQty > product.stock) {
+      if (newQty > availableStock) {
         return sendError(
           res,
           400,
-          `Cannot add ${parsedQty} more. Adding this would exceed available stock of ${product.stock} (Currently in cart: ${existingItem.quantity})`
+          `Cannot add ${parsedQty} more. Adding this would exceed available stock of ${availableStock} (Currently in cart: ${existingItem.quantity})`
         );
       }
 
       cartItem = await prisma.cartItem.update({
         where: { id: existingItem.id },
-        data: { quantity: newQty },
+        data: { quantity: newQty, ...(variantId ? { variantId } : {}) },
         include: {
           product: {
             select: { id: true, name: true, price: true, stock: true },
+          },
+          variant: {
+            select: { id: true, sku: true, name: true, price: true, stock: true },
           },
         },
       });
@@ -163,11 +178,15 @@ const addItemToCart = async (req, res) => {
         data: {
           cartId: cart.id,
           productId: product.id,
+          variantId: variantId || null,
           quantity: parsedQty,
         },
         include: {
           product: {
             select: { id: true, name: true, price: true, stock: true },
+          },
+          variant: {
+            select: { id: true, sku: true, name: true, price: true, stock: true },
           },
         },
       });
