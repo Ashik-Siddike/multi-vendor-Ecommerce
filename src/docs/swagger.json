@@ -83,6 +83,18 @@
       "description": "Multi-vendor orders and item tracking"
     },
     {
+      "name": "Reviews",
+      "description": "Product reviews and ratings (Verified Purchase)"
+    },
+    {
+      "name": "Wishlist",
+      "description": "Customer wishlist and saved items"
+    },
+    {
+      "name": "Coupons",
+      "description": "Platform and vendor discount coupons"
+    },
+    {
       "name": "Admin",
       "description": "Administrative moderation and analytics"
     }
@@ -1093,6 +1105,494 @@
           "403": {
             "description": "Forbidden - requires Admin"
           }
+        }
+      }
+    },
+    "/api/v1/products/{productId}/reviews": {
+      "get": {
+        "tags": ["Reviews"],
+        "summary": "Get reviews for a product (Public)",
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "default": 1 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "default": 10 }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Reviews retrieved successfully" },
+          "404": { "description": "Product not found" }
+        }
+      },
+      "post": {
+        "tags": ["Reviews"],
+        "summary": "Submit a review for a purchased product (Customer only, Verified Purchase)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["rating"],
+                "properties": {
+                  "rating": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5,
+                    "example": 5
+                  },
+                  "comment": {
+                    "type": "string",
+                    "example": "Outstanding product! High build quality and fast delivery."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Review submitted successfully" },
+          "400": { "description": "Invalid rating or input" },
+          "403": { "description": "Forbidden - Verified purchase (delivered) required" },
+          "404": { "description": "Product not found" },
+          "409": { "description": "Conflict - Already reviewed this product" }
+        }
+      }
+    },
+    "/api/v1/reviews/my-reviews": {
+      "get": {
+        "tags": ["Reviews"],
+        "summary": "Get all reviews submitted by logged-in customer",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Reviews retrieved successfully" }
+        }
+      }
+    },
+    "/api/v1/reviews/{id}": {
+      "delete": {
+        "tags": ["Reviews"],
+        "summary": "Delete a review (Customer own review or Admin)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Review deleted successfully" },
+          "403": { "description": "Forbidden - Not your review" },
+          "404": { "description": "Review not found" }
+        }
+      }
+    },
+    "/api/v1/wishlist": {
+      "get": {
+        "tags": ["Wishlist"],
+        "summary": "Get logged-in customer's wishlist with products",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Wishlist retrieved successfully" }
+        }
+      },
+      "delete": {
+        "tags": ["Wishlist"],
+        "summary": "Clear entire wishlist",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Wishlist cleared successfully" }
+        }
+      }
+    },
+    "/api/v1/wishlist/{productId}": {
+      "post": {
+        "tags": ["Wishlist"],
+        "summary": "Add product to wishlist",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "201": { "description": "Product added to wishlist" },
+          "200": { "description": "Product already in wishlist" },
+          "404": { "description": "Product not found" }
+        }
+      },
+      "delete": {
+        "tags": ["Wishlist"],
+        "summary": "Remove product from wishlist",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Product removed from wishlist" },
+          "404": { "description": "Product not in wishlist" }
+        }
+      }
+    },
+    "/api/v1/wishlist/toggle/{productId}": {
+      "post": {
+        "tags": ["Wishlist"],
+        "summary": "Toggle product in wishlist (Add if absent, Remove if present)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Product removed from wishlist" },
+          "201": { "description": "Product added to wishlist" }
+        }
+      }
+    },
+    "/api/v1/coupons": {
+      "get": {
+        "tags": ["Coupons"],
+        "summary": "Get all active coupons (Public)",
+        "responses": {
+          "200": { "description": "Coupons retrieved successfully" }
+        }
+      },
+      "post": {
+        "tags": ["Coupons"],
+        "summary": "Create coupon (Admin for platform-wide, Vendor for shop-specific)",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["code", "discountValue", "expiryDate"],
+                "properties": {
+                  "code": { "type": "string", "example": "SUMMER20" },
+                  "discountType": { "type": "string", "enum": ["PERCENTAGE", "FIXED"], "default": "PERCENTAGE" },
+                  "discountValue": { "type": "number", "example": 20 },
+                  "minOrderValue": { "type": "number", "example": 50 },
+                  "maxDiscount": { "type": "number", "example": 100 },
+                  "expiryDate": { "type": "string", "format": "date-time", "example": "2026-12-31T23:59:59.000Z" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Coupon created successfully" },
+          "400": { "description": "Validation error" },
+          "409": { "description": "Coupon code already exists" }
+        }
+      }
+    },
+    "/api/v1/coupons/apply": {
+      "post": {
+        "tags": ["Coupons"],
+        "summary": "Validate and calculate discount for coupon code",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["code", "orderAmount"],
+                "properties": {
+                  "code": { "type": "string", "example": "SUMMER20" },
+                  "orderAmount": { "type": "number", "example": 150 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Coupon applied and discount calculated" },
+          "400": { "description": "Coupon expired or minimum order value not met" },
+          "404": { "description": "Invalid or inactive coupon" }
+        }
+      }
+    },
+    "/api/v1/coupons/{id}": {
+      "delete": {
+        "tags": ["Coupons"],
+        "summary": "Delete coupon (Admin or Vendor owner)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Coupon deleted successfully" },
+          "403": { "description": "Forbidden - Not your coupon" },
+          "404": { "description": "Coupon not found" }
+        }
+      }
+    },
+    "/api/v1/admin/orders/{orderId}/verify-payment": {
+      "patch": {
+        "tags": ["Admin"],
+        "summary": "Admin verify manual mobile/bank payment",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["paymentStatus"],
+                "properties": {
+                  "paymentStatus": {
+                    "type": "string",
+                    "enum": ["PAID", "FAILED"],
+                    "example": "PAID"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Payment status updated successfully" },
+          "400": { "description": "Invalid paymentStatus" },
+          "404": { "description": "Order not found" }
+        }
+      }
+    },
+    "/api/v1/wishlist": {
+      "get": {
+        "tags": ["Wishlist"],
+        "summary": "Get customer's wishlist",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Wishlist retrieved successfully" }
+        }
+      },
+      "delete": {
+        "tags": ["Wishlist"],
+        "summary": "Clear entire wishlist",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Wishlist cleared successfully" }
+        }
+      }
+    },
+    "/api/v1/wishlist/toggle/{productId}": {
+      "post": {
+        "tags": ["Wishlist"],
+        "summary": "Toggle product in wishlist (add if missing, remove if present)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Product removed from wishlist" },
+          "201": { "description": "Product added to wishlist" },
+          "404": { "description": "Product not found" }
+        }
+      }
+    },
+    "/api/v1/wishlist/{productId}": {
+      "post": {
+        "tags": ["Wishlist"],
+        "summary": "Add product to wishlist",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "201": { "description": "Product added to wishlist" },
+          "200": { "description": "Product already in wishlist" }
+        }
+      },
+      "delete": {
+        "tags": ["Wishlist"],
+        "summary": "Remove product from wishlist",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Product removed from wishlist" },
+          "404": { "description": "Product not in wishlist" }
+        }
+      }
+    },
+    "/api/v1/coupons": {
+      "get": {
+        "tags": ["Coupons"],
+        "summary": "List active coupons",
+        "responses": {
+          "200": { "description": "Coupons retrieved successfully" }
+        }
+      },
+      "post": {
+        "tags": ["Coupons"],
+        "summary": "Create a coupon (Admin for platform-wide, Vendor for own shop)",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["code", "discountValue", "expiryDate"],
+                "properties": {
+                  "code": { "type": "string", "example": "EID2026" },
+                  "discountType": { "type": "string", "enum": ["PERCENTAGE", "FIXED"], "default": "PERCENTAGE" },
+                  "discountValue": { "type": "number", "example": 15 },
+                  "minOrderValue": { "type": "number", "example": 100 },
+                  "maxDiscount": { "type": "number", "example": 50 },
+                  "expiryDate": { "type": "string", "format": "date-time", "example": "2027-12-31T23:59:59Z" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Coupon created successfully" },
+          "409": { "description": "Coupon code already exists" }
+        }
+      }
+    },
+    "/api/v1/coupons/apply": {
+      "post": {
+        "tags": ["Coupons"],
+        "summary": "Validate and calculate discount for a coupon",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["code", "orderAmount"],
+                "properties": {
+                  "code": { "type": "string", "example": "EID2026" },
+                  "orderAmount": { "type": "number", "example": 500 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Coupon applied successfully" },
+          "400": { "description": "Minimum order not met or coupon expired" },
+          "404": { "description": "Coupon not found" }
+        }
+      }
+    },
+    "/api/v1/coupons/{id}": {
+      "delete": {
+        "tags": ["Coupons"],
+        "summary": "Delete a coupon (Admin or Vendor owner)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Coupon deleted successfully" },
+          "403": { "description": "Forbidden" }
+        }
+      }
+    },
+    "/api/v1/admin/orders/{orderId}/verify-payment": {
+      "patch": {
+        "tags": ["Admin"],
+        "summary": "Verify manual payment (bKash/Nagad/Bank) for an order",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["paymentStatus"],
+                "properties": {
+                  "paymentStatus": { "type": "string", "enum": ["PAID", "FAILED"], "example": "PAID" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Payment status updated" },
+          "404": { "description": "Order not found" }
         }
       }
     }

@@ -11,6 +11,9 @@ const adminRoutes = require('./routes/admin.routes');
 const productRoutes = require('./routes/product.routes');
 const cartRoutes = require('./routes/cart.routes');
 const orderRoutes = require('./routes/order.routes');
+const reviewRoutes = require('./routes/review.routes');
+const wishlistRoutes = require('./routes/wishlist.routes');
+const couponRoutes = require('./routes/coupon.routes');
 const { authRateLimiter } = require('./middlewares/rateLimiter.middleware');
 const { sendError, sendSuccess } = require('./utils/response');
 
@@ -43,6 +46,9 @@ app.use('/api/v1/shops', shopRoutes);
 app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/cart', cartRoutes);
 app.use('/api/v1/orders', orderRoutes);
+app.use('/api/v1/reviews', reviewRoutes);
+app.use('/api/v1/wishlist', wishlistRoutes);
+app.use('/api/v1/coupons', couponRoutes);
 
 // Admin Routes (supporting /api/v1/admin/dashboard-stats & /api/v1/admin/shops)
 app.use('/api/v1/admin', adminRoutes);

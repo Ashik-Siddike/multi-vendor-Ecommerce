@@ -5,6 +5,7 @@ const {
   approveShop,
   getDashboardStats,
 } = require('../controllers/admin.controller');
+const { verifyOrderPayment } = require('../controllers/order.controller');
 const { verifyToken, checkRole } = require('../middlewares/auth.middleware');
 
 // All admin routes require ADMIN role
@@ -12,6 +13,9 @@ router.use(verifyToken, checkRole('ADMIN'));
 
 // Dashboard stats endpoint
 router.get('/dashboard-stats', getDashboardStats);
+
+// Manual payment verification endpoint
+router.patch('/orders/:orderId/verify-payment', verifyOrderPayment);
 
 // Shop management endpoints under /admin
 router.get('/shops/pending', getPendingShops);

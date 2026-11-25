@@ -21,6 +21,24 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum PaymentMethod {
+  COD
+  MANUAL_BKASH
+  MANUAL_NAGAD
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
 // ১. ইউজার টেবিল
 model User {
   id        String   @id @default(uuid())
@@ -31,9 +49,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  shop      Shop?    // একজন ইউজারের একটিই শপ থাকতে পারবে
-  cart      Cart?    // একজন ইউজারের একটিই কার্ট থাকবে
+  shop      Shop?        // একজন ইউজারের একটিই শপ থাকতে পারবে
+  cart      Cart?        // একজন ইউজারের একটিই কার্ট থাকবে
+  wishlist  Wishlist?    // ইউজারের উইশলিস্ট
   orders    Order[]
+  reviews   Review[]     // ইউজারের দেওয়া রিভিউগুলো
 }
 
 // ২. শপ / ভেন্ডর টেবিল
@@ -50,6 +70,7 @@ model Shop {
 
   products    Product[]
   orderItems  OrderItem[] // ভেন্ডর শুধু তার নিজের অর্ডার আইটেম দেখবে
+  coupons     Coupon[]    // ভেন্ডরের তৈরি কুপন
 }
 
 // ৩. ক্যাটাগরি টেবিল
@@ -61,21 +82,25 @@ model Category {
 
 // ৪. প্রোডাক্ট টেবিল
 model Product {
-  id          String      @id @default(uuid())
-  name        String
-  description String
-  price       Float
-  stock       Int         @default(0)
-  images      String[]    // একাধিক ছবির URL রাখার জন্য অ্যারে
-  shopId      String
-  shop        Shop        @relation(fields: [shopId], references: [id])
-  categoryId  String
-  category    Category    @relation(fields: [categoryId], references: [id])
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id            String         @id @default(uuid())
+  name          String
+  description   String
+  price         Float
+  stock         Int            @default(0)
+  images        String[]       // একাধিক ছবির URL রাখার জন্য অ্যারে
+  averageRating Float          @default(0)
+  reviewCount   Int            @default(0)
+  shopId        String
+  shop          Shop           @relation(fields: [shopId], references: [id])
+  categoryId    String
+  category      Category       @relation(fields: [categoryId], references: [id])
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
-  cartItems   CartItem[]
-  orderItems  OrderItem[]
+  cartItems     CartItem[]
+  orderItems    OrderItem[]
+  reviews       Review[]
+  wishlistItems WishlistItem[]
 }
 
 // ৫. কার্ট ও কার্ট আইটেম
@@ -100,15 +125,18 @@ model CartItem {
 
 // ৬. অর্ডার ও মাল্টি-ভেন্ডর অর্ডার আইটেম
 model Order {
-  id          String      @id @default(uuid())
-  userId      String
-  user        User        @relation(fields: [userId], references: [id])
-  totalAmount Float
-  address     String
-  phone       String
-  createdAt   DateTime    @default(now())
+  id            String        @id @default(uuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  totalAmount   Float
+  address       String
+  phone         String
+  paymentMethod PaymentMethod @default(COD)
+  paymentStatus PaymentStatus @default(PENDING)
+  transactionId String?
+  createdAt     DateTime      @default(now())
 
-  items       OrderItem[]
+  items         OrderItem[]
 }
 
 model OrderItem {
@@ -122,4 +150,54 @@ model OrderItem {
   quantity  Int
   price     Float       // অর্ডারের সময় প্রোডাক্টের দাম কত ছিল তা সেভ থাকবে
   status    OrderStatus @default(PENDING) // প্রত্যেক ভেন্ডর তার নিজের আইটেমের স্ট্যাটাস পাল্টাবে
+}
+
+// ৭. রিভিউ ও রেটিং টেবিল
+model Review {
+  id        String   @id @default(uuid())
+  rating    Int      // ১ থেকে ৫ স্টার
+  comment   String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, productId]) // একজন কাস্টমার একটি প্রোডাক্টে সর্বোচ্চ একটি রিভিউ দিতে পারবে
+}
+
+// ৮. উইশলিস্ট টেবিল
+model Wishlist {
+  id        String         @id @default(uuid())
+  userId    String         @unique
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     WishlistItem[]
+  createdAt DateTime       @default(now())
+}
+
+model WishlistItem {
+  id         String   @id @default(uuid())
+  wishlistId String
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([wishlistId, productId])
+}
+
+// ৯. কুপন টেবিল
+model Coupon {
+  id            String       @id @default(uuid())
+  code          String       @unique
+  discountType  DiscountType @default(PERCENTAGE)
+  discountValue Float
+  minOrderValue Float        @default(0)
+  maxDiscount   Float?
+  expiryDate    DateTime
+  isActive      Boolean      @default(true)
+  shopId        String?      // null হলে অ্যাডমিন/প্ল্যাটফর্ম-ওয়াইড, অন্যথায় ভেন্ডর-স্পেসিফিক
+  shop          Shop?        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  createdAt     DateTime     @default(now())
 }

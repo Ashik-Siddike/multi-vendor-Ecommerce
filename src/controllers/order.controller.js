@@ -2,6 +2,8 @@ const prisma = require('../config/prisma');
 const { sendSuccess, sendError } = require('../utils/response');
 
 const VALID_ORDER_STATUSES = ['PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
+const VALID_PAYMENT_METHODS = ['COD', 'MANUAL_BKASH', 'MANUAL_NAGAD', 'BANK_TRANSFER'];
+const VALID_PAYMENT_STATUSES = ['PENDING', 'PAID', 'FAILED'];
 
 /**
  * Place a multi-vendor order from active cart
@@ -10,7 +12,13 @@ const VALID_ORDER_STATUSES = ['PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', '
 const createOrder = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { address, phone } = req.body;
+    const {
+      address,
+      phone,
+      paymentMethod = 'COD',
+      transactionId = null,
+      couponCode = null,
+    } = req.body;
 
     if (!address || typeof address !== 'string' || !address.trim()) {
       return sendError(res, 400, 'Shipping address is required');
@@ -18,6 +26,26 @@ const createOrder = async (req, res) => {
 
     if (!phone || typeof phone !== 'string' || !phone.trim()) {
       return sendError(res, 400, 'Contact phone number is required');
+    }
+
+    const normalizedPaymentMethod = paymentMethod.toUpperCase();
+    if (!VALID_PAYMENT_METHODS.includes(normalizedPaymentMethod)) {
+      return sendError(
+        res,
+        400,
+        `Invalid paymentMethod. Allowed: ${VALID_PAYMENT_METHODS.join(', ')}`
+      );
+    }
+
+    // Require transactionId if not Cash On Delivery
+    if (normalizedPaymentMethod !== 'COD') {
+      if (!transactionId || typeof transactionId !== 'string' || !transactionId.trim()) {
+        return sendError(
+          res,
+          400,
+          `transactionId is required for manual payment method: ${normalizedPaymentMethod}`
+        );
+      }
     }
 
     // Execute atomic transaction for checkout
@@ -76,18 +104,44 @@ const createOrder = async (req, res) => {
       }
 
       // 4. Calculate total amount
-      const totalAmount = cart.items.reduce(
+      let subtotal = cart.items.reduce(
         (sum, item) => sum + item.quantity * item.product.price,
         0
       );
+
+      // Optional Coupon Discount
+      let discountAmount = 0;
+      if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
+        const coupon = await tx.coupon.findUnique({
+          where: { code: couponCode.trim().toUpperCase() },
+        });
+
+        if (coupon && coupon.isActive && new Date(coupon.expiryDate) >= new Date()) {
+          if (subtotal >= coupon.minOrderValue) {
+            if (coupon.discountType === 'PERCENTAGE') {
+              discountAmount = (subtotal * coupon.discountValue) / 100;
+              if (coupon.maxDiscount && discountAmount > coupon.maxDiscount) {
+                discountAmount = coupon.maxDiscount;
+              }
+            } else {
+              discountAmount = Math.min(subtotal, coupon.discountValue);
+            }
+          }
+        }
+      }
+
+      const finalTotal = Math.max(0, subtotal - discountAmount);
 
       // 5. Create Order and OrderItems (multi-vendor split)
       const newOrder = await tx.order.create({
         data: {
           userId,
-          totalAmount: parseFloat(totalAmount.toFixed(2)),
+          totalAmount: parseFloat(finalTotal.toFixed(2)),
           address: address.trim(),
           phone: phone.trim(),
+          paymentMethod: normalizedPaymentMethod,
+          paymentStatus: 'PENDING',
+          transactionId: transactionId ? transactionId.trim() : null,
           items: {
             create: cart.items.map((item) => ({
               productId: item.productId,
@@ -187,6 +241,9 @@ const getVendorOrders = async (req, res) => {
             id: true,
             address: true,
             phone: true,
+            paymentMethod: true,
+            paymentStatus: true,
+            transactionId: true,
             createdAt: true,
             user: {
               select: { id: true, name: true, email: true },
@@ -234,6 +291,7 @@ const updateOrderItemStatus = async (req, res) => {
     // Check if order item exists
     const orderItem = await prisma.orderItem.findUnique({
       where: { id: itemId },
+      include: { order: true },
     });
 
     if (!orderItem) {
@@ -266,6 +324,14 @@ const updateOrderItemStatus = async (req, res) => {
       },
     });
 
+    // If marked DELIVERED and paymentMethod is COD, update order paymentStatus to PAID
+    if (normalizedStatus === 'DELIVERED' && orderItem.order.paymentMethod === 'COD') {
+      await prisma.order.update({
+        where: { id: orderItem.orderId },
+        data: { paymentStatus: 'PAID' },
+      });
+    }
+
     return sendSuccess(res, 200, 'Order item status updated successfully', {
       orderItem: updatedItem,
     });
@@ -275,9 +341,51 @@ const updateOrderItemStatus = async (req, res) => {
   }
 };
 
+/**
+ * Admin verify manual mobile/bank payment
+ * PATCH /api/v1/admin/orders/:orderId/verify-payment (Admin only)
+ */
+const verifyOrderPayment = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { paymentStatus } = req.body;
+
+    if (!paymentStatus || !VALID_PAYMENT_STATUSES.includes(paymentStatus.toUpperCase())) {
+      return sendError(
+        res,
+        400,
+        `Invalid paymentStatus. Allowed values: ${VALID_PAYMENT_STATUSES.join(', ')}`
+      );
+    }
+
+    const normalizedStatus = paymentStatus.toUpperCase();
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      return sendError(res, 404, 'Order not found');
+    }
+
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
+      data: { paymentStatus: normalizedStatus },
+    });
+
+    return sendSuccess(res, 200, `Order payment status updated to ${normalizedStatus}`, {
+      order: updatedOrder,
+    });
+  } catch (error) {
+    console.error('Error in verifyOrderPayment:', error);
+    return sendError(res, 500, 'Failed to verify payment', error.message);
+  }
+};
+
 module.exports = {
   createOrder,
   getMyOrders,
   getVendorOrders,
   updateOrderItemStatus,
+  verifyOrderPayment,
 };
