@@ -6,6 +6,10 @@ const {
   getVendorOrders,
   updateOrderItemStatus,
 } = require('../controllers/order.controller');
+const {
+  addTrackingEvent,
+  getTrackingTimeline,
+} = require('../controllers/return-tracking.controller');
 const { verifyToken, checkRole } = require('../middlewares/auth.middleware');
 
 // Customer order routes
@@ -15,5 +19,9 @@ router.get('/my-orders', verifyToken, checkRole(['CUSTOMER', 'ADMIN']), getMyOrd
 // Vendor order routes
 router.get('/vendor-orders', verifyToken, checkRole(['VENDOR', 'ADMIN']), getVendorOrders);
 router.patch('/items/:itemId/status', verifyToken, checkRole(['VENDOR', 'ADMIN']), updateOrderItemStatus);
+
+// Courier Tracking Timeline
+router.post('/items/:itemId/tracking', verifyToken, checkRole(['VENDOR', 'ADMIN']), addTrackingEvent);
+router.get('/items/:itemId/tracking', verifyToken, getTrackingTimeline);
 
 module.exports = router;

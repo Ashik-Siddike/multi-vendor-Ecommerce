@@ -115,6 +115,18 @@
       "description": "Multi-tenant storefront resolution, theme templates, color customization & SaaS plans"
     },
     {
+      "name": "Variants & Flash Sales",
+      "description": "Product SKU variants and time-bounded flash sale campaigns"
+    },
+    {
+      "name": "Returns & Tracking",
+      "description": "Order return/refund disputes, courier tracking timeline & CSV export"
+    },
+    {
+      "name": "Staff & Audit Logs",
+      "description": "Merchant team staff management & platform audit logs"
+    },
+    {
       "name": "Admin",
       "description": "Administrative moderation and analytics"
     }
@@ -1935,6 +1947,148 @@
           "200": { "description": "Storefront resolved" },
           "404": { "description": "Storefront not found" }
         }
+      }
+    },
+    "/api/v1/products/{productId}/variants": {
+      "get": {
+        "tags": ["Variants & Flash Sales"],
+        "summary": "List all SKU variants of a product (Public)",
+        "parameters": [{ "name": "productId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Variants retrieved" } }
+      },
+      "post": {
+        "tags": ["Variants & Flash Sales"],
+        "summary": "Create a SKU variant for a product (Vendor only)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "productId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "201": { "description": "Variant created" } }
+      }
+    },
+    "/api/v1/variants/{id}": {
+      "patch": {
+        "tags": ["Variants & Flash Sales"],
+        "summary": "Update a product variant (Vendor only)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Variant updated" } }
+      },
+      "delete": {
+        "tags": ["Variants & Flash Sales"],
+        "summary": "Delete a product variant (Vendor only)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Variant deleted" } }
+      }
+    },
+    "/api/v1/flash-sales": {
+      "get": {
+        "tags": ["Variants & Flash Sales"],
+        "summary": "List currently active flash sale campaigns (Public)",
+        "responses": { "200": { "description": "Active flash sales retrieved" } }
+      },
+      "post": {
+        "tags": ["Variants & Flash Sales"],
+        "summary": "Create a time-bounded flash sale (Vendor only)",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "201": { "description": "Flash sale created" } }
+      }
+    },
+    "/api/v1/returns": {
+      "post": {
+        "tags": ["Returns & Tracking"],
+        "summary": "Customer: Request return/refund for a delivered order item",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "201": { "description": "Return requested" } }
+      }
+    },
+    "/api/v1/returns/my-returns": {
+      "get": {
+        "tags": ["Returns & Tracking"],
+        "summary": "Customer: List own return requests",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Returns retrieved" } }
+      }
+    },
+    "/api/v1/returns/{id}/vendor": {
+      "patch": {
+        "tags": ["Returns & Tracking"],
+        "summary": "Vendor: Approve or Reject a return request",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Return processed" } }
+      }
+    },
+    "/api/v1/returns/{id}/dispute": {
+      "patch": {
+        "tags": ["Returns & Tracking"],
+        "summary": "Customer: Escalate rejected return to Admin Dispute",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Dispute escalated" } }
+      }
+    },
+    "/api/v1/admin/returns/{id}": {
+      "patch": {
+        "tags": ["Admin"],
+        "summary": "Admin: Resolve a disputed return request",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Dispute resolved" } }
+      }
+    },
+    "/api/v1/orders/items/{itemId}/tracking": {
+      "get": {
+        "tags": ["Returns & Tracking"],
+        "summary": "Get courier tracking timeline for an order item",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "itemId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Timeline retrieved" } }
+      },
+      "post": {
+        "tags": ["Returns & Tracking"],
+        "summary": "Vendor: Add courier tracking event (Steadfast/Pathao/RedX)",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "itemId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "201": { "description": "Tracking event added" } }
+      }
+    },
+    "/api/v1/vendor/orders/export-csv": {
+      "get": {
+        "tags": ["Returns & Tracking"],
+        "summary": "Vendor: Export all shop orders as downloadable CSV",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "CSV file stream" } }
+      }
+    },
+    "/api/v1/vendor/staff": {
+      "get": {
+        "tags": ["Staff & Audit Logs"],
+        "summary": "Vendor: List all staff members of own shop",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Staff retrieved" } }
+      },
+      "post": {
+        "tags": ["Staff & Audit Logs"],
+        "summary": "Vendor: Invite/add a staff member (MANAGER, ORDER_HANDLER, INVENTORY_CLERK)",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "201": { "description": "Staff added" } }
+      }
+    },
+    "/api/v1/vendor/staff/{staffId}": {
+      "delete": {
+        "tags": ["Staff & Audit Logs"],
+        "summary": "Vendor: Remove a staff member",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "staffId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Staff removed" } }
+      }
+    },
+    "/api/v1/admin/audit-logs": {
+      "get": {
+        "tags": ["Staff & Audit Logs"],
+        "summary": "Admin: View platform security & activity audit logs",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Audit logs retrieved" } }
       }
     }
   }

@@ -9,6 +9,12 @@ const {
   updateVendorTheme,
   upgradeSubscription,
 } = require('../controllers/saas.controller');
+const { exportVendorOrdersCsv } = require('../controllers/return-tracking.controller');
+const {
+  addShopStaff,
+  getShopStaff,
+  removeShopStaff,
+} = require('../controllers/staff-audit.controller');
 const { verifyToken, checkRole } = require('../middlewares/auth.middleware');
 
 // All vendor routes require VENDOR role
@@ -19,5 +25,9 @@ router.post('/payouts', requestPayout);
 router.get('/analytics', getVendorAnalytics);
 router.patch('/theme', updateVendorTheme);
 router.post('/subscription/upgrade', upgradeSubscription);
+router.get('/orders/export-csv', exportVendorOrdersCsv);
+router.get('/staff', getShopStaff);
+router.post('/staff', addShopStaff);
+router.delete('/staff/:staffId', removeShopStaff);
 
 module.exports = router;
